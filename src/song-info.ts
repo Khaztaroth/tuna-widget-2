@@ -2,30 +2,81 @@ import { CSSResultGroup, LitElement, css, html } from "lit";
 import { customElement } from "lit/decorators.js";
 import { Task } from '@lit/task'
 
-type info = {
-    album: string
-    artists: Array<string>
-    cover_path: string
-    cover_url: string
-    duration: number
-    lyrics: string
-    playback_date: string
-    playback_time: string
-    status: string
-    status_id: number
-    title: string
-  };
+type MusicData = {
+    recenttracks: {
+      track: Array<{
+        artist: {
+          mbid: string
+          "#text": string
+        }
+        streamable: string
+        image: Array<{
+          size: string
+          "#text": string
+        }>
+        mbid: string
+        album: {
+          mbid: string
+          "#text": string
+        }
+        name: string
+        "@attr"?: {
+          nowplaying: string
+        }
+        url: string
+        date?: {
+          uts: string
+          "#text": string
+        }
+      }>
+      "@attr": {
+        user: string
+        totalPages: string
+        page: string
+        total: string
+        perPage: string
+      }
+    }
+  }
+  
+  type SongData = {
+    artist: {
+        mbid: string
+        "#text": string
+      }
+      streamable: string
+      image: Array<{
+        size: string
+        "#text": string
+      }>
+      mbid: string
+      album: {
+        mbid: string
+        "#text": string
+      }
+      name: string
+      "@attr"?: {
+        nowplaying: string
+      }
+      url: string
+      date?: {
+        uts: string
+        "#text": string
+      }
+    }
+
+    const apiKey = import.meta.env.VITE_API_KEY
 
 @customElement('song-info')
 export class SongInfo extends LitElement {
     private _InfoTask: Task;
 
     intervalid: number | undefined;
-    songInfo?: info
-    songArtist?: string[]
+    songInfo?: MusicData
+    songArtist?: string
     songTitle?: string
-    songAlbum?: string
-    songCoverURL: string = ''
+    songAlbum?: string 
+    songCoverURL: string = './placeholder.png'
 
     constructor() {
         super();
@@ -33,13 +84,13 @@ export class SongInfo extends LitElement {
         this._InfoTask = new Task (this, {
             task: async () => {
                
-                const response = await fetch("http://localhost:1608")
+                const response = await fetch(`http://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=khaztaroth315&api_key=${apiKey}&format=json&limit=2`)
                 if (!response.ok) {throw new Error(`${response.status}`); }
-                const data: info = await response.json()
+                const data: MusicData = await response.json()
                 this.songInfo = data
 
                 //If information has changed, update the component                
-                if (this.songTitle !== this.songInfo.title) {
+                if (this.songTitle !== this.songInfo?.recenttracks.track[0].name) {
                     this.updateWithFade(this.songInfo)
                 }               
             },
@@ -58,18 +109,20 @@ export class SongInfo extends LitElement {
         }
     }
 
-    updateWithFade(data: {artists: string[], title: string, cover_path: string, album: string}) {
+    updateWithFade(data: MusicData) {
         const mainBlock = this.shadowRoot!.getElementById('mainBlock')
+
+        var newSong: SongData = data.recenttracks.track[0]
 
         if (mainBlock) {
             mainBlock.classList.add('fade-out');
 
             //Info gets updated only after the element has faded out, creating a cleaner transition
             setTimeout(() => {
-                this.songArtist = data.artists;
-                this.songTitle = data.title;
-                this.songCoverURL = data.cover_path;
-                this.songAlbum = data.album;
+                this.songArtist = newSong.artist["#text"];
+                this.songTitle = newSong.name;
+                this.songCoverURL = newSong.image[3]["#text"];
+                this.songAlbum = newSong.album["#text"];
                 this.requestUpdate();
                 setTimeout(() => {
                     mainBlock.classList.remove('fade-out');
@@ -106,8 +159,15 @@ export class SongInfo extends LitElement {
             background-color: rgba(0, 0, 0, 0.75)
 
             }
+        .imgBlock {
+            --height-size: calc(85%) ;
+            min-width: calc(var(--height-size)/5);
+            max-width: calc(var(--height-size)/5);
+        }
         .imgBlock img {
-            height: calc(85% + 2vw);
+            --height-size: calc(85%) ;
+            height: var(--height-size);
+            max-width: calc(var(--height-size));
             border-radius: calc( 0.5rem + 0.5vw );
             
         }
