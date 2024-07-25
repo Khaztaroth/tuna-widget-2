@@ -160,12 +160,12 @@ export class SongInfo extends LitElement {
 
             }
         .imgBlock {
-            --height-size: calc(85%) ;
+            --height-size: calc(85% + 2vw) ;
             min-width: calc(var(--height-size)/5);
             max-width: calc(var(--height-size)/5);
         }
         .imgBlock img {
-            --height-size: calc(85%) ;
+            --height-size: calc(85% + 2vw) ;
             height: var(--height-size);
             max-width: calc(var(--height-size));
             border-radius: calc( 0.5rem + 0.5vw );
