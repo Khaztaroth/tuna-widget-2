@@ -1,93 +1,45 @@
 import { CSSResultGroup, LitElement, css, html } from "lit";
 import { customElement } from "lit/decorators.js";
 import { Task } from '@lit/task'
+import { DetailedSongData, MusicData, SongData } from "./types";
+import { Duration, DateTime } from "luxon";
 
-type MusicData = {
-    recenttracks: {
-      track: Array<{
-        artist: {
-          mbid: string
-          "#text": string
-        }
-        streamable: string
-        image: Array<{
-          size: string
-          "#text": string
-        }>
-        mbid: string
-        album: {
-          mbid: string
-          "#text": string
-        }
-        name: string
-        "@attr"?: {
-          nowplaying: string
-        }
-        url: string
-        date?: {
-          uts: string
-          "#text": string
-        }
-      }>
-      "@attr": {
-        user: string
-        totalPages: string
-        page: string
-        total: string
-        perPage: string
-      }
-    }
-  }
-  
-  type SongData = {
-    artist: {
-        mbid: string
-        "#text": string
-      }
-      streamable: string
-      image: Array<{
-        size: string
-        "#text": string
-      }>
-      mbid: string
-      album: {
-        mbid: string
-        "#text": string
-      }
-      name: string
-      "@attr"?: {
-        nowplaying: string
-      }
-      url: string
-      date?: {
-        uts: string
-        "#text": string
-      }
-    }
-
-    const apiKey = import.meta.env.VITE_API_KEY
+const apiKey = import.meta.env.VITE_API_KEY
 
 @customElement('song-info')
 export class SongInfo extends LitElement {
     private _InfoTask: Task;
+    private _DurationTask: Task;
 
-    intervalid: number | undefined;
+    songUpdateInterval: number | undefined;
+    durationUpdateInterval: number | undefined;
     songInfo?: MusicData
     songArtist?: string
     songTitle?: string
     songAlbum?: string 
     songCoverURL: string = './placeholder.png'
+    remainingTime: string
+    playtime: DateTime
+    now: DateTime = DateTime.now()
 
     constructor() {
         super();
-        this.intervalid = undefined;
+        this.songUpdateInterval = undefined;
         this._InfoTask = new Task (this, {
             task: async () => {
                
-                const response = await fetch(`http://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=khaztaroth315&api_key=${apiKey}&format=json&limit=2`)
-                if (!response.ok) {throw new Error(`${response.status}`); }
-                const data: MusicData = await response.json()
-                this.songInfo = data
+                const musicInfo = await fetch(`http://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=khaztaroth315&api_key=${apiKey}&format=json&limit=2`)
+                if (!musicInfo.ok) {throw new Error(`${musicInfo.status}`); }
+                const MusicData: MusicData = await musicInfo.json()
+                this.songInfo = MusicData
+
+                const artistName = this.songInfo.recenttracks.track[0].artist["#text"].split(" ").join("")
+                const songName = this.songInfo.recenttracks.track[0].name.split(" ").join("")
+
+                const songInfo = await fetch(`http://ws.audioscrobbler.com/2.0/?method=track.getInfo&api_key=${apiKey}&artist=${artistName}&track=${songName}&format=json`)
+                if (!songInfo.ok) {throw new Error(`${songInfo.status}`)}
+                const SongData: DetailedSongData = await songInfo.json()
+                this.playtime = DateTime.fromFormat(SongData.track.duration, "S")
 
                 //If information has changed, update the component                
                 if (this.songTitle !== this.songInfo?.recenttracks.track[0].name) {
@@ -95,17 +47,24 @@ export class SongInfo extends LitElement {
                 }               
             },
         })
+        this._DurationTask = new Task (this, {
+            task: async () => {
+                const songEnd = this.now.plus(this.playtime)
+                this.remainingTime = this.playtime.diff(songEnd).toHuman().toString()
+            }
+        })
     }
 
     connectedCallback(): void {
         super.connectedCallback();
-        this.intervalid = window.setInterval(() => this._InfoTask.run(), 5000);
+        this.songUpdateInterval = window.setInterval(() => this._InfoTask.run(), 5000);
+        this.durationUpdateInterval = window.setInterval(() => this._DurationTask.run(), 1000);
     }
 
     disconnectedCallback(): void {
         super.disconnectedCallback();
-        if(this.intervalid !== undefined ) {
-            clearInterval(this.intervalid);
+        if(this.songUpdateInterval !== undefined ) {
+            clearInterval(this.songUpdateInterval);
         }
     }
 
@@ -136,11 +95,12 @@ export class SongInfo extends LitElement {
         <div class="bgBlock" id="bgBlock">
             <div class="mainBlock" id="mainBlock">
             <div class="imgBlock" id="imgBlock">
-                <img src=${this.songCoverURL} alt=${`Album cover for ${this.songAlbum}`}>
+               <img src=${this.songCoverURL} alt=${`Album cover for ${this.songAlbum}`}>
             </div>
             <div class="infoBlock" id="infoBlock">
                 <h2>${this.songArtist}</h2>
                 <h1>${this.songTitle}</h1>
+                <h2>${this.remainingTime}</h2>
             </div>
         </div>
         </div>
@@ -153,21 +113,21 @@ export class SongInfo extends LitElement {
             padding: calc( 1rem + 0.5vw );
 
             border-radius: calc(1rem + 1vw );
-            width: calc( 100vw - 10% );
+            width: calc( 100vw - 5% );
             height: calc( 100vw - 20% );
 
             background-color: rgba(0, 0, 0, 0.75)
 
             }
         .imgBlock {
-            --height-size: calc(85% + 2vw) ;
-            min-width: calc(var(--height-size)/5);
-            max-width: calc(var(--height-size)/5);
+            --height-size: 300px;
+            min-width: var(--height-size);
+            max-width: var(--height-size);
         }
         .imgBlock img {
-            --height-size: calc(85% + 2vw) ;
+            --height-size: 300px ;
             height: var(--height-size);
-            max-width: calc(var(--height-size));
+            max-width: var(--height-size);
             border-radius: calc( 0.5rem + 0.5vw );
             
         }
