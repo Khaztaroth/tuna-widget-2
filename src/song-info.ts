@@ -2,7 +2,7 @@ import { CSSResultGroup, LitElement, css, html } from "lit";
 import { customElement } from "lit/decorators.js";
 import { Task } from '@lit/task'
 import { DetailedSongData, MusicData, SongData } from "./types";
-import { Duration, DateTime } from "luxon";
+import { DateTime, Duration } from "luxon";
 
 const apiKey = import.meta.env.VITE_API_KEY
 
@@ -18,8 +18,10 @@ export class SongInfo extends LitElement {
     songTitle?: string
     songAlbum?: string 
     songCoverURL: string = './placeholder.png'
-    remainingTime: string
-    playtime: DateTime
+
+    detailedSongData: DetailedSongData | undefined
+    initialSongDuration: string = '0:00'
+    songDuration: string = '0:00'
     now: DateTime = DateTime.now()
 
     constructor() {
@@ -31,26 +33,27 @@ export class SongInfo extends LitElement {
                 const musicInfo = await fetch(`http://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=khaztaroth315&api_key=${apiKey}&format=json&limit=2`)
                 if (!musicInfo.ok) {throw new Error(`${musicInfo.status}`); }
                 const MusicData: MusicData = await musicInfo.json()
-                this.songInfo = MusicData
+                this.songInfo = MusicData 
 
-                const artistName = this.songInfo.recenttracks.track[0].artist["#text"].split(" ").join("")
-                const songName = this.songInfo.recenttracks.track[0].name.split(" ").join("")
-
+                const artistName = encodeURIComponent(this.songInfo?.recenttracks.track[0].artist["#text"]);
+                const songName = encodeURIComponent(this.songInfo?.recenttracks.track[0].name);
+    
                 const songInfo = await fetch(`http://ws.audioscrobbler.com/2.0/?method=track.getInfo&api_key=${apiKey}&artist=${artistName}&track=${songName}&format=json`)
                 if (!songInfo.ok) {throw new Error(`${songInfo.status}`)}
-                const SongData: DetailedSongData = await songInfo.json()
-                this.playtime = DateTime.fromFormat(SongData.track.duration, "S")
+                this.detailedSongData = await songInfo.json()
+                this.initialSongDuration = this.detailedSongData?.track.duration || '0:00'
 
                 //If information has changed, update the component                
                 if (this.songTitle !== this.songInfo?.recenttracks.track[0].name) {
+                    this.now = DateTime.now()
                     this.updateWithFade(this.songInfo)
-                }               
+                }           
             },
+
         })
-        this._DurationTask = new Task (this, {
+        this._DurationTask = new Task(this, {
             task: async () => {
-                const songEnd = this.now.plus(this.playtime)
-                this.remainingTime = this.playtime.diff(songEnd).toHuman().toString()
+                this.songDuration = this.now.diff(DateTime.now().minus(Duration.fromObject({milliseconds: +this.initialSongDuration}))).toFormat('m:ss')
             }
         })
     }
@@ -94,14 +97,14 @@ export class SongInfo extends LitElement {
         return html`
         <div class="bgBlock" id="bgBlock">
             <div class="mainBlock" id="mainBlock">
-            <div class="imgBlock" id="imgBlock">
-               <img src=${this.songCoverURL} alt=${`Album cover for ${this.songAlbum}`}>
-            </div>
-            <div class="infoBlock" id="infoBlock">
-                <h2>${this.songArtist}</h2>
-                <h1>${this.songTitle}</h1>
-                <h2>${this.remainingTime}</h2>
-            </div>
+                <div class="imgBlock" id="imgBlock">
+                <img src=${this.songCoverURL} alt=${`Album cover for ${this.songAlbum}`}>
+                </div>
+                <div class="infoBlock" id="infoBlock">
+                    <h2>${this.songArtist}</h2>
+                    <h1>${this.songTitle}</h1>
+                </div>
+                <h3>${this.songDuration}</h3>
         </div>
         </div>
         `
@@ -162,6 +165,14 @@ export class SongInfo extends LitElement {
 
             transition: opacity 1s;
             opacity: 1;
+        }
+        .mainBlock h3 {
+            font-size: calc(100% + 2.5vw);
+            text-align: center;
+            align-self: flex-end;
+            margin-left: auto;
+            margin-right: 0;
+            font-weight: 400;
         }
         .fade-out {
             opacity: 0;
